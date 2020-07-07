@@ -1,0 +1,16 @@
+{
+  "name": "koha-plugin-donation-manager",
+  "version": "0.0.0",
+  "previous_version": "0.0.0",
+  "description": "Koha Donation Manager Plugin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bywatersolutions/koha-plugin-donation-manager.git"
+  },
+  "author": "Kyle M Hall <kyle@bywatersolutions.com>",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/bywatersolutions/koha-plugin-donation-manager/issues"
+  },
+  "homepage": "https://github.com/bywatersolutions/koha-plugin-donation-manager#readme",
+}

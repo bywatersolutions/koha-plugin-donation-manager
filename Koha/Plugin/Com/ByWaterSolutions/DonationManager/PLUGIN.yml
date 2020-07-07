@@ -1,0 +1,10 @@
+name: Donation Manager
+author: Kyle M Hall
+date_authored: 2020-07-07
+date_updated: 1900-01-01
+minimum_version: {MINIMUM_VERSION}
+maximum_version:
+version: {VERSION}
+description: This plugin implements every available feature of the plugin system and is meant to be documentation and a starting point for writing your own plugins!
+description: 'Track and manage patron donations from Koha.',
+module: Koha::Plugin::Com::ByWaterSolutions::DonationManager
