@@ -296,12 +296,25 @@ sub configure {
 sub install() {
     my ( $self, $args ) = @_;
 
-    my $table = $self->get_qualified_table_name('mytable');
-
     return C4::Context->dbh->do( "
-        CREATE TABLE IF NOT EXISTS $table (
-            `borrowernumber` INT( 11 ) NOT NULL
-        ) ENGINE = INNODB;
+        CREATE TABLE IF NOT EXISTS donations (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `borrowernumber` INT( 11 ) NOT NULL,
+            `amount` decimal(28,6) NULL default NULL,
+            `type` varchar(80) NULL default NULL,
+            `branchcode` VARCHAR( 10 ) NULL DEFAULT NULL,
+            `biblionumber` int(11) NULL DEFAULT NULL,
+            `itemnumber` int(11) NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY `borrowernumber` (borrowernumber),
+            KEY `branchcode` (`branchcode`),
+            KEY `biblionumber` (`biblionumber`),
+            KEY `itemnumber` (`itemnumber`),
+            CONSTRAINT `dnbn` FOREIGN KEY (`borrowernumber`) REFERENCES `borrowers` (`borrowernumber`) ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT `dnbranch` FOREIGN KEY (`branchcode`) REFERENCES `branches` (`branchcode`) ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT `dnbibno` FOREIGN KEY (`biblionumber`) REFERENCES `biblio` (`biblionumber`) ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT `dnitmno` FOREIGN KEY (`itemnumber`) REFERENCES `items` (`itemnumber`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     " );
 }
 
@@ -322,9 +335,7 @@ sub upgrade {
 sub uninstall() {
     my ( $self, $args ) = @_;
 
-    my $table = $self->get_qualified_table_name('mytable');
-
-    return C4::Context->dbh->do("DROP TABLE IF EXISTS $table");
+    return C4::Context->dbh->do("DROP TABLE IF EXISTS donations");
 }
 
 ## These are helper functions that are specific to this plugin
