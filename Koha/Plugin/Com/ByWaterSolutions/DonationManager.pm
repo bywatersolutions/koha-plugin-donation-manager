@@ -1,27 +1,18 @@
 package Koha::Plugin::Com::ByWaterSolutions::DonationManager;
 
-## It's good practice to use Modern::Perl
 use Modern::Perl;
 
-## Required for all plugins
 use base qw(Koha::Plugins::Base);
 
-## We will also need to include any Koha libraries we want to access
 use C4::Context;
 use C4::Auth;
 use Koha::Patron;
-use Koha::DateUtils;
-use Koha::Libraries;
-use Koha::Patron::Categories;
-use Koha::Account;
-use Koha::Account::Lines;
-use MARC::Record;
+
 use Cwd qw(abs_path);
 use Mojo::JSON qw(decode_json);;
 use URI::Escape qw(uri_unescape);
 use LWP::UserAgent;
 
-## Here we set our plugin version
 our $VERSION = "{VERSION}";
 our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
 
@@ -37,28 +28,17 @@ our $metadata = {
     description     => 'Track and manage patron donations from Koha.',
 };
 
-## This is the minimum code required for a plugin's 'new' method
-## More can be added, but none should be removed
 sub new {
     my ( $class, $args ) = @_;
 
-    ## We need to add our metadata here so our base class can access it
     $args->{'metadata'} = $metadata;
     $args->{'metadata'}->{'class'} = $class;
 
-    ## Here, we call the 'new' method for our base class
-    ## This runs some additional magic and checking
-    ## and returns our actual $self
     my $self = $class->SUPER::new($args);
 
     return $self;
 }
 
-## The existance of a 'report' subroutine means the plugin is capable
-## of running a report. This example report can output a list of patrons
-## either as HTML or as a CSV file. Technically, you could put all your code
-## in the report method, but that would be a really poor way to write code
-## for all but the simplest reports
 sub report {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -71,194 +51,47 @@ sub report {
     }
 }
 
-## The existance of a 'tool' subroutine means the plugin is capable
-## of running a tool. The difference between a tool and a report is
-## primarily semantic, but in general any plugin that modifies the
-## Koha database should be considered a tool
 sub tool {
     my ( $self, $args ) = @_;
 
     my $cgi = $self->{'cgi'};
 
-    unless ( $cgi->param('submitted') ) {
-        $self->tool_step1();
+    my $borrowernumber = $cgi->param('borrowernumber');
+    my $action = $cgi->param('action') || q{};
+
+    if ( $action eq "add" ) {
+        $self->tool_add({ borrowernumber => $borrowernumber });
+    } elsif ( $action eq "delete" ) {
+        my $id = $cgi->param('id');
+        $self->tool_delete({ borrowernumber => $borrowernumber, id => $id });
+    } else {
+        $self->tool_display({ borrowernumber => $borrowernumber });
     }
-    else {
-        $self->tool_step2();
-    }
-
 }
 
-## The existiance of a 'to_marc' subroutine means the plugin is capable
-## of converting some type of file to MARC for use from the stage records
-## for import tool
-##
-## This example takes a text file of the arbtrary format:
-## First name:Middle initial:Last name:Year of birth:Title
-## and converts each line to a very very basic MARC record
-sub to_marc {
-    my ( $self, $args ) = @_;
-
-    my $data = $args->{data};
-
-    my $batch = q{};
-
-    foreach my $line ( split( /\n/, $data ) ) {
-        my $record = MARC::Record->new();
-        my ( $firstname, $initial, $lastname, $year, $title ) = split(/:/, $line );
-
-        ## create an author field.
-        my $author_field = MARC::Field->new(
-            '100', 1, '',
-            a => "$lastname, $firstname $initial.",
-            d => "$year-"
-        );
-
-        ## create a title field.
-        my $title_field = MARC::Field->new(
-            '245', '1', '4',
-            a => "$title",
-            c => "$firstname $initial. $lastname",
-        );
-
-        $record->append_fields( $author_field, $title_field );
-
-        $batch .= $record->as_usmarc() . "\x1D";
-    }
-
-    return $batch;
-}
-
-## If your plugin can process payments online,
-## and that feature of the plugin is enabled,
-## this method will return true
-sub opac_online_payment {
-    my ( $self, $args ) = @_;
-
-    return $self->retrieve_data('enable_opac_payments') eq 'Yes';
-}
-
-## This method triggers the beginning of the payment process
-## It could result in a form displayed to the patron the is submitted
-## or go straight to a redirect to the payment service ala paypal
-sub opac_online_payment_begin {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-
-    my ( $template, $borrowernumber ) = get_template_and_user(
-        {   template_name   => abs_path( $self->mbf_path( 'opac_online_payment_begin.tt' ) ),
-            query           => $cgi,
-            type            => 'opac',
-            authnotrequired => 0,
-            is_plugin       => 1,
-        }
-    );
-
-    my @accountline_ids = $cgi->multi_param('accountline');
-
-    my $rs = Koha::Database->new()->schema()->resultset('Accountline');
-    my @accountlines = map { $rs->find($_) } @accountline_ids;
-
-    $template->param(
-        borrower             => scalar Koha::Patrons->find($borrowernumber),
-        payment_method       => scalar $cgi->param('payment_method'),
-        enable_opac_payments => $self->retrieve_data('enable_opac_payments'),
-        accountlines         => \@accountlines,
-    );
-
-
-    $self->output_html( $template->output() );
-}
-
-## This method triggers the end of the payment process
-## Should should result in displaying a page indicating
-## the success or failure of the payment.
-sub opac_online_payment_end {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-
-    my ( $template, $borrowernumber ) = get_template_and_user(
-        {
-            template_name =>
-              abs_path( $self->mbf_path('opac_online_payment_end.tt') ),
-            query           => $cgi,
-            type            => 'opac',
-            authnotrequired => 0,
-            is_plugin       => 1,
-        }
-    );
-
-    my $m;
-    my $v;
-
-    my $amount          = $cgi->param('amount');
-    my @accountline_ids = $cgi->multi_param('accountlines_id');
-
-    $m = "no_amount"       unless $amount;
-    $m = "no_accountlines" unless @accountline_ids;
-
-    if ( $amount && @accountline_ids ) {
-        my $account = Koha::Account->new( { patron_id => $borrowernumber } );
-        my @accountlines = Koha::Account::Lines->search(
-            {
-                accountlines_id => { -in => \@accountline_ids }
-            }
-        )->as_list();
-        foreach my $id (@accountline_ids) {
-            $account->pay(
-                {
-                    amount => $amount,
-                    lines  => \@accountlines,
-                    note   => "Paid via DonationManager ImaginaryPay",
-                }
-            );
-        }
-
-        $m = 'valid_payment';
-        $v = $amount;
-    }
-
-    $template->param(
-        borrower      => scalar Koha::Patrons->find($borrowernumber),
-        message       => $m,
-        message_value => $v,
-    );
-
-    $self->output_html( $template->output() );
-}
-
-## If your plugin needs to add some CSS to the staff intranet, you'll want
-## to return that CSS here. Don't forget to wrap your CSS in <style>
-## tags. By not adding them automatically for you, you'll have a chance
-## to include external CSS files as well!
 sub intranet_head {
     my ( $self ) = @_;
 
-    return q|
-        <style>
-          body {
-            background-color: orange;
-          }
-        </style>
-    |;
+    return q{};
 }
 
-## If your plugin needs to add some javascript in the staff intranet, you'll want
-## to return that javascript here. Don't forget to wrap your javascript in
-## <script> tags. By not adding them automatically for you, you'll have a
-## chance to include other javascript files if necessary.
 sub intranet_js {
     my ( $self ) = @_;
 
     return q|
-        <script>console.log("Thanks for testing the kitchen sink plugin!");</script>
+        <script>
+            $(document).ready( function() {
+                let href = $("a:contains('Details')").attr('href');
+                if ( href ) {
+                  let parts = href.split("=");
+                  let borrowernumber = parts[1];
+                  $( "#menu ul" ).append( $( "<li><a href='/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3ACom%3A%3AByWaterSolutions%3A%3ADonationManager&method=tool&borrowernumber=" + borrowernumber + "'>Donations</a></li>" ) ); 
+                }
+            });
+        </script>
     |;
 }
 
-## If your tool is complicated enough to needs it's own setting/configuration
-## you will want to add a 'configure' method to your plugin like so.
-## Here I am throwing all the logic into the 'configure' method, but it could
-## be split up like the 'report' method is.
 sub configure {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -289,10 +122,6 @@ sub configure {
     }
 }
 
-## This is the 'install' method. Any database tables or other setup that should
-## be done when the plugin if first installed should be executed in this method.
-## The installation method should always return true if the installation succeeded
-## or false if it failed.
 sub install() {
     my ( $self, $args ) = @_;
 
@@ -318,41 +147,23 @@ sub install() {
     " );
 }
 
-## This is the 'upgrade' method. It will be triggered when a newer version of a
-## plugin is installed over an existing older version of a plugin
 sub upgrade {
     my ( $self, $args ) = @_;
-
-    my $dt = dt_from_string();
-    $self->store_data( { last_upgraded => $dt->ymd('-') . ' ' . $dt->hms(':') } );
 
     return 1;
 }
 
-## This method will be run just before the plugin files are deleted
-## when a plugin is uninstalled. It is good practice to clean up
-## after ourselves!
 sub uninstall() {
     my ( $self, $args ) = @_;
 
     return C4::Context->dbh->do("DROP TABLE IF EXISTS donations");
 }
 
-## These are helper functions that are specific to this plugin
-## You can manage the control flow of your plugin any
-## way you wish, but I find this is a good approach
 sub report_step1 {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
 
     my $template = $self->get_template({ file => 'report-step1.tt' });
-
-    my @libraries = Koha::Libraries->search;
-    my @categories = Koha::Patron::Categories->search_limited({}, {order_by => ['description']});
-    $template->param(
-        libraries => \@libraries,
-        categories => \@categories,
-    );
 
     $self->output_html( $template->output() );
 }
@@ -361,81 +172,49 @@ sub report_step2 {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
 
-    my $dbh = C4::Context->dbh;
-
-    my $branch                = $cgi->param('branch');
-    my $category_code         = $cgi->param('categorycode');
-    my $borrower_municipality = $cgi->param('borrower_municipality');
-    my $output                = $cgi->param('output');
-
-    my $fromDay   = $cgi->param('fromDay');
-    my $fromMonth = $cgi->param('fromMonth');
-    my $fromYear  = $cgi->param('fromYear');
-
-    my $toDay   = $cgi->param('toDay');
-    my $toMonth = $cgi->param('toMonth');
-    my $toYear  = $cgi->param('toYear');
-
-    my ( $fromDate, $toDate );
-    if ( $fromDay && $fromMonth && $fromYear && $toDay && $toMonth && $toYear )
-    {
-        $fromDate = "$fromYear-$fromMonth-$fromDay";
-        $toDate   = "$toYear-$toMonth-$toDay";
-    }
-
-    my $query = "
-        SELECT firstname, surname, address, city, zipcode, city, zipcode, dateexpiry FROM borrowers 
-        WHERE branchcode LIKE '$branch'
-        AND categorycode LIKE '$category_code'
-    ";
-
-    if ( $fromDate && $toDate ) {
-        $query .= "
-            AND DATE( dateexpiry ) >= DATE( '$fromDate' )
-            AND DATE( dateexpiry ) <= DATE( '$toDate' )  
-        ";
-    }
-
-    my $sth = $dbh->prepare($query);
-    $sth->execute();
-
-    my @results;
-    while ( my $row = $sth->fetchrow_hashref() ) {
-        push( @results, $row );
-    }
-
-    my $filename;
-    if ( $output eq "csv" ) {
-        print $cgi->header( -attachment => 'borrowers.csv' );
-        $filename = 'report-step2-csv.tt';
-    }
-    else {
-        print $cgi->header();
-        $filename = 'report-step2-html.tt';
-    }
-
-    my $template = $self->get_template({ file => $filename });
-
-    $template->param(
-        date_ran     => dt_from_string(),
-        results_loop => \@results,
-        branch       => GetBranchName($branch),
-    );
-
-    unless ( $category_code eq '%' ) {
-        $template->param( category_code => $category_code );
-    }
+    my $template = $self->get_template({ file => 'something.tt' });
 
     print $template->output();
 }
 
-sub tool_step1 {
+sub tool_display {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
 
-    my $template = $self->get_template({ file => 'tool-step1.tt' });
+    my $template = $self->get_template({ file => 'tool-display.tt' });
+
+    my $borrowernumber = $args->{borrowernumber};
+    my $patron = Koha::Patrons->find( $borrowernumber );
+
+    my $branch_limit = C4::Context->userenv->{"branch"};
+
+    my $dbh = C4::Context->dbh;
+    my $sth = $dbh->prepare("SELECT * FROM donations WHERE borrowernumber = ? AND branchcode = ?");
+    $sth->execute( $borrowernumber, $branch_limit );
+
+    my @donations;
+    while ( my $d = $sth->fetchrow_hashref() ) {
+        $d->{biblio} = Koha::Biblios->find( $d->{biblionumber} ) if $d->{biblionumber};
+        $d->{item} = Koha::Items->find( $d->{itemnumber} ) if $d->{itemnumber};
+        push( @donations, $d );
+    }
+
+    $template->param(
+        patron => $patron,
+        donations => \@donations,
+    );
 
     $self->output_html( $template->output() );
+}
+
+sub tool_delete {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+
+    my $dbh = C4::Context->dbh;
+    $dbh->do("DELETE FROM donations WHERE id = ?", undef, $args->{id});
+
+    $self->tool_display($args);
 }
 
 sub tool_step2 {

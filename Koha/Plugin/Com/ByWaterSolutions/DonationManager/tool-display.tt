@@ -1,0 +1,50 @@
+[% USE Price %]
+[% INCLUDE 'doc-head-open.inc' %]
+ <title>Koha: Donation Manager Plugin: Example Tool</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Donation Manager &rsaquo; <a href="http://127.0.0.1:8081/cgi-bin/koha/circ/circulation.pl?borrowernumber=[% patron.id %]">[% patron.firstname %] [% patron.surname %]</a></div>
+
+<p/>
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-2"></div>
+    <div class="col-md-8">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Amount</th>
+            <th>Type</th>
+            <th>Record</th>
+            <th>Item</th>
+            <th>&nbsp;</th>
+          </tr>
+        </thead>
+        <tbody>
+          [% FOREACH d IN donations %]
+            <tr>
+              <td>[% d.amount | $Price %]</td>
+              <td>[% d.type %]</td>
+              <td><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% d.biblionumber %]">[% d.biblio.title %]</a></td>
+              <td><a href="/cgi-bin/koha/catalogue/moredetail.pl?itemnumber=[% d.itemnumber %]&biblionumber=[% d.biblionumber %]">[% d.item.barcode %]</a></td>
+              <td>
+                 <a
+                    class="btn btn-default donation-delete"
+                    href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3ACom%3A%3AByWaterSolutions%3A%3ADonationManager&method=tool&borrowernumber=[% patron.id %]&action=delete&id=[% d.id %]">
+                    Delete
+                 </a>
+              </td>
+            </tr>
+          [% END %]
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+[% INCLUDE 'intranet-bottom.inc' %]
