@@ -60,7 +60,7 @@ sub tool {
     my $action = $cgi->param('action') || q{};
 
     if ( $action eq "add" ) {
-        $self->tool_add({ borrowernumber => $borrowernumber });
+        $self->tool_add();
     } elsif ( $action eq "delete" ) {
         my $id = $cgi->param('id');
         $self->tool_delete({ borrowernumber => $borrowernumber, id => $id });
@@ -85,7 +85,7 @@ sub intranet_js {
                 if ( href ) {
                   let parts = href.split("=");
                   let borrowernumber = parts[1];
-                  $( "#menu ul" ).append( $( "<li><a href='/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3ACom%3A%3AByWaterSolutions%3A%3ADonationManager&method=tool&borrowernumber=" + borrowernumber + "'>Donations</a></li>" ) ); 
+                  $( "#menu ul" ).append( $( "<li id='donations-tab'><a href='/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3ACom%3A%3AByWaterSolutions%3A%3ADonationManager&method=tool&borrowernumber=" + borrowernumber + "'>Donations</a></li>" ) ); 
                 }
             });
         </script>
@@ -183,7 +183,8 @@ sub tool_display {
 
     my $template = $self->get_template({ file => 'tool-display.tt' });
 
-    my $borrowernumber = $args->{borrowernumber};
+    my $borrowernumber = $cgi->param('borrowernumber');
+
     my $patron = Koha::Patrons->find( $borrowernumber );
 
     my $branch_limit = C4::Context->userenv->{"branch"};
@@ -192,8 +193,11 @@ sub tool_display {
     my $sth = $dbh->prepare("SELECT * FROM donations WHERE borrowernumber = ? AND branchcode = ?");
     $sth->execute( $borrowernumber, $branch_limit );
 
+    warn "BN: $borrowernumber";
+    warn "BL: $branch_limit";
     my @donations;
     while ( my $d = $sth->fetchrow_hashref() ) {
+        warn "D: " . Data::Dumper::Dumper( $d );
         $d->{biblio} = Koha::Biblios->find( $d->{biblionumber} ) if $d->{biblionumber};
         $d->{item} = Koha::Items->find( $d->{itemnumber} ) if $d->{itemnumber};
         push( @donations, $d );
@@ -205,6 +209,32 @@ sub tool_display {
     );
 
     $self->output_html( $template->output() );
+}
+
+sub tool_add {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+
+    my $borrowernumber = $cgi->param('borrowernumber') || undef;
+    my $amount = $cgi->param('amount') || undef;
+    my $type = $cgi->param('type') || undef;
+    my $branchcode = C4::Context->userenv->{'branch'} || undef;
+    my $biblionumber = $cgi->param('biblionumber') || undef;
+    my $barcode = $cgi->param('barcode') || undef;
+
+    my $biblio = Koha::Biblios->find($biblionumber);
+    $biblionumber = undef unless $biblio;
+
+    my $item = Koha::Items->find({ barcode => $barcode });
+    my $itemnumber = $item ? $item->id : undef;
+    $biblionumber = $item ? $item->biblionumber : $biblionumber;
+
+    my $dbh = C4::Context->dbh;
+    my $query = "INSERT INTO donations ( borrowernumber, amount, type, branchcode, biblionumber, itemnumber ) VALUES ( ?, ?, ?, ?, ?, ? )";
+    my $sth = $dbh->prepare($query);
+    $sth->execute( $borrowernumber, $amount, $type, $branchcode, $biblionumber, $itemnumber );
+
+    $self->tool_display($args);
 }
 
 sub tool_delete {

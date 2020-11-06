@@ -1,4 +1,6 @@
+[% USE AuthorisedValues %]
 [% USE Price %]
+[% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
  <title>Koha: Donation Manager Plugin: Example Tool</title>
 [% INCLUDE 'doc-head-close.inc' %]
@@ -13,8 +15,41 @@
 
 <div class="container-fluid">
   <div class="row">
-    <div class="col-md-2"></div>
+    <div class="col-md-2">[% INCLUDE 'circ-menu.inc' %]</div>
     <div class="col-md-8">
+      	<p><button id="new-donation-btn" class="btn">New donation</button></p>
+
+		<form id="new-donation-form" method="post">
+          <input type="hidden" name="class" value="[% CLASS %]"/>
+          <input type="hidden" name="method" value="[% METHOD %]"/>
+          <input type="hidden" name="action" value="add"/>
+          <input type="hidden" name="borrowernumber" value="[% patron.id %]"/>
+
+		  <div class="form-group">
+			<label for="amount">Amount</label>
+			<input type="text" class="form-control" name="amount" id="amount" placeholder="Amount">
+		  </div>
+		  <div class="form-group">
+			<label for="type">Type</label>
+            [% SET types = AuthorisedValues.GetAuthValueDropbox('DONATION_TYPES') %]
+            <select class="form-control" name="type" id="type">
+              [% FOREACH t IN types %]
+                  <option value="[% t.authorised_value | html %]">[% t.lib | html %]</option>
+              [% END %]
+            </select>
+
+		  </div>
+		  <div class="form-group">
+			<label for="biblionumber">Biblionumber</label>
+			<input type="text" class="form-control" name="biblionumber" id="biblionumber" placeholder="Biblionumber">
+		  </div>
+		  <div class="form-group">
+			<label for="barcode">Barcode</label>
+			<input type="text" class="form-control" name="barcode" id="barcode" placeholder="Barcode">
+		  </div>
+		  <p><button type="submit" class="btn btn-default">Submit</button></p>
+		</form>
+
       <table class="table table-striped">
         <thead>
           <tr>
@@ -29,7 +64,7 @@
           [% FOREACH d IN donations %]
             <tr>
               <td>[% d.amount | $Price %]</td>
-              <td>[% d.type %]</td>
+			  <td>[% AuthorisedValues.GetByCode( 'DONATION_TYPES', d.type ) | html %]</td>
               <td><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% d.biblionumber %]">[% d.biblio.title %]</a></td>
               <td><a href="/cgi-bin/koha/catalogue/moredetail.pl?itemnumber=[% d.itemnumber %]&biblionumber=[% d.biblionumber %]">[% d.item.barcode %]</a></td>
               <td>
@@ -46,5 +81,24 @@
     </div>
   </div>
 </div>
+
+[% MACRO jsinclude BLOCK %]
+<script>
+	$('document').ready(function() { 
+		$('#new-donation-form').hide();
+		$('#new-donation-btn').on('click', function() {
+			$('#new-donation-form').toggle();
+		});
+
+		$('.donation-delete').click(function() {
+			return window.confirm("Are you sure?");
+		});
+
+		$('#donations-tab').ready(function() {
+			$('#donations-tab').addClass('active');
+		});
+	});
+</script>
+[% END %]
 
 [% INCLUDE 'intranet-bottom.inc' %]
