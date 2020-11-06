@@ -134,6 +134,7 @@ sub install() {
             `branchcode` VARCHAR( 10 ) NULL DEFAULT NULL,
             `biblionumber` int(11) NULL DEFAULT NULL,
             `itemnumber` int(11) NULL DEFAULT NULL,
+            `created_on` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY `borrowernumber` (borrowernumber),
             KEY `branchcode` (`branchcode`),
