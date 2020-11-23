@@ -129,9 +129,9 @@ sub install() {
     return C4::Context->dbh->do( "
         CREATE TABLE IF NOT EXISTS donations (
             `id` int(11) NOT NULL AUTO_INCREMENT,
-            `borrowernumber` INT( 11 ) NOT NULL,
-            `amount` decimal(28,6) NULL default NULL,
-            `type` varchar(80) NULL default NULL,
+            `borrowernumber` INT( 11 ) NULL DEFAULT NULL,
+            `amount` decimal(28,6) NULL DEFAULT NULL,
+            `type` varchar(80) NULL DEFAULT NULL,
             `branchcode` VARCHAR( 10 ) NULL DEFAULT NULL,
             `biblionumber` int(11) NULL DEFAULT NULL,
             `itemnumber` int(11) NULL DEFAULT NULL,
@@ -141,10 +141,10 @@ sub install() {
             KEY `branchcode` (`branchcode`),
             KEY `biblionumber` (`biblionumber`),
             KEY `itemnumber` (`itemnumber`),
-            CONSTRAINT `dnbn` FOREIGN KEY (`borrowernumber`) REFERENCES `borrowers` (`borrowernumber`) ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT `dnbn` FOREIGN KEY (`borrowernumber`) REFERENCES `borrowers` (`borrowernumber`) ON DELETE SET NULL ON UPDATE CASCADE,
             CONSTRAINT `dnbranch` FOREIGN KEY (`branchcode`) REFERENCES `branches` (`branchcode`) ON DELETE SET NULL ON UPDATE CASCADE,
-            CONSTRAINT `dnbibno` FOREIGN KEY (`biblionumber`) REFERENCES `biblio` (`biblionumber`) ON DELETE CASCADE ON UPDATE CASCADE,
-            CONSTRAINT `dnitmno` FOREIGN KEY (`itemnumber`) REFERENCES `items` (`itemnumber`) ON DELETE CASCADE ON UPDATE CASCADE
+            CONSTRAINT `dnbibno` FOREIGN KEY (`biblionumber`) REFERENCES `biblio` (`biblionumber`) ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT `dnitmno` FOREIGN KEY (`itemnumber`) REFERENCES `items` (`itemnumber`) ON DELETE SET NULL ON UPDATE CASCADE
         ) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     " );
 }
@@ -195,11 +195,8 @@ sub tool_display {
     my $sth = $dbh->prepare("SELECT * FROM donations WHERE borrowernumber = ? AND branchcode = ?");
     $sth->execute( $borrowernumber, $branch_limit );
 
-    warn "BN: $borrowernumber";
-    warn "BL: $branch_limit";
     my @donations;
     while ( my $d = $sth->fetchrow_hashref() ) {
-        warn "D: " . Data::Dumper::Dumper( $d );
         $d->{biblio} = Koha::Biblios->find( $d->{biblionumber} ) if $d->{biblionumber};
         $d->{item} = Koha::Items->find( $d->{itemnumber} ) if $d->{itemnumber};
         push( @donations, $d );
