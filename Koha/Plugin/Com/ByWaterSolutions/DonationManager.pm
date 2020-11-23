@@ -7,6 +7,7 @@ use base qw(Koha::Plugins::Base);
 use C4::Context;
 use C4::Auth;
 use Koha::Patron;
+use Koha::DateUtils qw(dt_from_string);
 
 use Cwd qw(abs_path);
 use Mojo::JSON qw(decode_json);;
@@ -222,6 +223,8 @@ sub tool_add {
     my $branchcode = C4::Context->userenv->{'branch'} || undef;
     my $biblionumber = $cgi->param('biblionumber') || undef;
     my $barcode = $cgi->param('barcode') || undef;
+    my $date = dt_from_string($cgi->param('date')) || dt_from_string;
+    $date = $date->ymd;
 
     my $biblio = Koha::Biblios->find($biblionumber);
     $biblionumber = undef unless $biblio;
@@ -231,9 +234,9 @@ sub tool_add {
     $biblionumber = $item ? $item->biblionumber : $biblionumber;
 
     my $dbh = C4::Context->dbh;
-    my $query = "INSERT INTO donations ( borrowernumber, amount, type, branchcode, biblionumber, itemnumber ) VALUES ( ?, ?, ?, ?, ?, ? )";
+    my $query = "INSERT INTO donations ( borrowernumber, amount, type, branchcode, biblionumber, itemnumber, created_on ) VALUES ( ?, ?, ?, ?, ?, ?, ? )";
     my $sth = $dbh->prepare($query);
-    $sth->execute( $borrowernumber, $amount, $type, $branchcode, $biblionumber, $itemnumber );
+    $sth->execute( $borrowernumber, $amount, $type, $branchcode, $biblionumber, $itemnumber, $date );
 
     $self->tool_display($args);
 }
