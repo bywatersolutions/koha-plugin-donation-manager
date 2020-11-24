@@ -223,12 +223,17 @@ sub tool_add {
     my $date = dt_from_string($cgi->param('date')) || dt_from_string;
     $date = $date->ymd;
 
-    my $biblio = Koha::Biblios->find($biblionumber);
-    $biblionumber = undef unless $biblio;
+    if ( $biblionumber ) {
+        my $biblio = Koha::Biblios->find($biblionumber);
+        $biblionumber = undef unless $biblio;
+    }
 
-    my $item = Koha::Items->find({ barcode => $barcode });
-    my $itemnumber = $item ? $item->id : undef;
-    $biblionumber = $item ? $item->biblionumber : $biblionumber;
+    my $itemnumber;
+    if ( $barcode ) {
+        my $item = Koha::Items->find({ barcode => $barcode });
+        $itemnumber = $item ? $item->id : undef;
+        $biblionumber = $item ? $item->biblionumber : $biblionumber;
+    }
 
     my $dbh = C4::Context->dbh;
     my $query = "INSERT INTO donations ( borrowernumber, amount, type, branchcode, biblionumber, itemnumber, created_on ) VALUES ( ?, ?, ?, ?, ?, ?, ? )";
